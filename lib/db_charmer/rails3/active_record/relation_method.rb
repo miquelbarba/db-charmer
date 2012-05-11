@@ -12,7 +12,11 @@ module DbCharmer
       # Create a relation object and initialize its default connection
       def relation_with_db_charmer(*args, &block)
         relation_without_db_charmer(*args, &block).tap do |rel|
-          rel.db_charmer_connection = self.connection
+          if self.connection.respond_to?(:db_charmer_connection_name)
+            rel.db_charmer_connection_name = self.connection.db_charmer_connection_name
+          else
+            rel.db_charmer_connection_name = :master
+          end
           rel.db_charmer_enable_slaves = self.db_charmer_slaves.any?
           rel.db_charmer_connection_is_forced = !db_charmer_top_level_connection?
         end

@@ -8,7 +8,7 @@ module DbCharmer
         MASTER_METHODS = [ :delete, :delete_all, :destroy, :destroy_all, :reload, :update, :update_all ]
         ALL_METHODS = SLAVE_METHODS + MASTER_METHODS
 
-        DB_CHARMER_ATTRIBUTES = [ :db_charmer_connection, :db_charmer_connection_is_forced, :db_charmer_enable_slaves ]
+        DB_CHARMER_ATTRIBUTES = [ :db_charmer_connection_name, :db_charmer_connection_is_forced, :db_charmer_enable_slaves ]
 
         # Define the default relation connection + override all the query methods here
         def self.included(base)
@@ -64,7 +64,13 @@ module DbCharmer
             @klass.on_db(con, &block)
           else
             clone.tap do |result|
-              result.db_charmer_connection = con
+              if con.kind_of?(Symbol) || con.kind_of?(String)
+                result.db_charmer_connection_name = con
+              elsif con.respond_to?(:db_charmer_connection_name)
+                result.db_charmer_connection_name = con.db_charmer_connection_name
+              else
+                result.db_charmer_connection_name = :master
+              end
               result.db_charmer_connection_is_forced = true
             end
           end
@@ -72,7 +78,7 @@ module DbCharmer
 
         # Make sure we get the right connection here
         def connection
-          @klass.on_db(db_charmer_connection).connection
+          @klass.on_db(db_charmer_connection_name).connection
         end
 
         # Selects preferred destination (master/slave/default) for a query
@@ -104,7 +110,7 @@ module DbCharmer
           destination ||= select_destination(method, recommendation)
 
           # What method to use
-          on_db_method = [ :on_db, db_charmer_connection ]
+          on_db_method = [ :on_db, db_charmer_connection_name ]
           on_db_method = :on_master if destination == :master
           on_db_method = :first_level_on_slave if destination == :slave
 

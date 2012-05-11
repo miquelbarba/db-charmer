@@ -30,20 +30,17 @@ module DbCharmer
         return if self.respond_to?(:connection_with_magic)
         class << self
           # Make sure we check our accessors before going to the default connection retrieval method
+          # Synchronize read access so that other threads do not read
+          # the proxy when one thread is interrupted in an on_db call
           def connection_with_magic
-            db_charmer_remapped_connection || db_charmer_connection_proxy || connection_without_magic
-          end
-          alias_method_chain :connection, :magic
-
-          def connection_pool_with_magic
-            abstract_connection_class = connection.abstract_connection_class rescue nil # respond_to? doesn't work on connection_proxy...
-            if abstract_connection_class
-              connection_handler.retrieve_connection_pool(abstract_connection_class) || connection_pool_without_magic
+            block = lambda { db_charmer_remapped_connection || db_charmer_connection_proxy || connection_without_magic }
+            if Thread.current[:db_charmer_in_on_db_call]
+              block.call
             else
-              connection_pool_without_magic
+              db_charmer_connection_proxy_mutex.synchronize &block
             end
           end
-          alias_method_chain :connection_pool, :magic
+          alias_method_chain :connection, :magic
         end
       end
 
